@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/favicon.ico">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alertify | Instant Push Notifications</title>
+
+  <meta name="description" content="Send zero-friction push alerts to multiple devices without SMTP or DNS setup. No login, no tracking. Trigger notifications for IoT, SCADA, and scripts via a single HTTP POST request.">
+  <meta name="keywords" content="push notifications, HTTP POST alerts, IoT MQTT push alerts, Siemens Allen-Bradley PLC, SCADA monitoring, anonymous push, Python push notification, developer tools, Makers, DevOps alerts, system monitoring, real-time notifications">
+  
+  <!-- Open Graph / Facebook / LinkedIn (When people share your link) -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://alertify.while0x1.com/"> <!-- Update to your actual URL -->
+  <meta property="og:title" content="Alertify | Anonymous Push Notifications via HTTP POST">
+  <meta property="og:description" content="No SMTP. No DNS. No Tracking. Send push alerts to your phone from any script with a simple API call.">
+
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image">
+  <meta property="twitter:title" content="Alertify | Anonymous Push Notifications">
+  <meta property="twitter:description" content="Send zero-friction push alerts to your phone from any script with a simple API call.">
+
+
+  <style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --primary: #38bdf8;
+    --primary-hover: #0ea5e9;
+    --text: #f8fafc;
+    --text-muted: #94a3b8;
+    --border: #334155;
+  }
+  
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background-color: var(--bg);
+    color: var(--text);
+    margin: 0;
+    line-height: 1.6;
+  }
+
+  /* Navigation & Branding */
+  .navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    max-width: 1200px;
+    margin: 0 auto;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--text);
+    letter-spacing: -0.02em;
+    flex-shrink: 0;
+  }
+
+  @media (max-width: 480px) {
+    .navbar {
+      padding: 0.8rem 1rem;
+    }
+    .logo {
+      font-size: 1.3rem;
+    }
+    .logo svg {
+      width: 24px;
+      height: 24px;
+    }
+  }
+  
+  .logo svg {
+    width: 32px;
+    height: 32px;
+    stroke: var(--primary);
+  }
+
+  .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+  }
+  .nav-links a {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.95rem;
+    font-weight: 600;
+    transition: color 0.2s;
+  }
+  .nav-links a:hover {
+    color: var(--text);
+  }
+  .btn-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text) !important;
+  }
+  .btn-nav:hover {
+    background: var(--border);
+  }
+
+  /* Hero Section */
+  header {
+    padding: 4rem 2rem 4rem;
+    text-align: center;
+  }
+  h1 {
+    font-size: 3.5rem;
+    margin-bottom: 1rem;
+    letter-spacing: -0.05em;
+  }
+  h1 span { color: var(--primary); }
+  .subtitle {
+    color: var(--text-muted);
+    font-size: 1.25rem;
+    max-width: 600px;
+    margin: 0 auto 2rem;
+    text-wrap: balance;
+    text-align:center;
+  }
+  .hero-actions {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 2rem;
+  }
+  .btn-hero {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.8rem 1.5rem;
+    background: var(--primary);
+    color: var(--bg);
+    text-decoration: none;
+    border-radius: 6px;
+    font-weight: bold;
+    transition: background 0.2s;
+  }
+  .btn-hero:hover { background: var(--primary-hover); }
+
+  /* Code Editor Component */
+  .editor-wrapper {
+    max-width: 800px;
+    margin: 0 auto 4rem;
+    padding: 0 1rem;
+  }
+  .editor {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  }
+  .tabs {
+    display: flex;
+    background: #0b1120;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab {
+    padding: 1rem 2rem;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: color 0.2s;
+  }
+  .tab.active {
+    color: var(--primary);
+    box-shadow: inset 0 -2px 0 var(--primary);
+  }
+  .code-pane {
+    display: none;
+    padding: 1.5rem;
+    margin: 0;
+    color: #e2e8f0;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.95rem;
+    overflow-x: auto;
+  }
+  .code-pane.active { display: block; }
+  
+  /* Syntax Highlighting Mock */
+  .kw { color: #c678dd; } /* Keyword */
+  .str { color: #98c379; } /* String */
+  .func { color: #61afef; } /* Function */
+
+  /* Pricing Section */
+  .pricing-container {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    padding: 2rem;
+    flex-wrap: wrap;
+    margin-bottom: 4rem;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2.5rem;
+    width: 320px;
+    text-align: left;
+  }
+  .card.pro {
+    border-color: var(--primary);
+    position: relative;
+  }
+  .badge {
+    position: absolute;
+    top: -12px;
+    right: 24px;
+    background: var(--primary);
+    color: var(--bg);
+    font-size: 0.75rem;
+    font-weight: bold;
+    padding: 4px 12px;
+    border-radius: 12px;
+  }
+  .price {
+    font-size: 3rem;
+    font-weight: 800;
+    margin: 1rem 0;
+  }
+  .price span {
+    font-size: 1rem;
+    color: var(--text-muted);
+    font-weight: normal;
+  }
+  .features {
+    list-style: none;
+    padding: 0;
+    margin: 2rem 0;
+    color: var(--text-muted);
+  }
+  .features li {
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .features li::before {
+    content: "✓";
+    color: var(--primary);
+    font-weight: bold;
+  }
+
+  /* Buttons */
+  .btn {
+    display: block;
+    width: 100%;
+    padding: 1rem;
+    text-align: center;
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-primary {
+    background: var(--primary);
+    color: var(--bg);
+    border: none;
+  }
+  .btn-primary:hover { background: var(--primary-hover); }
+
+  /* ========================================= */
+  /* MODAL STYLES (Bulletproof & Mobile Ready) */
+  /* ========================================= */
+  
+  /* Modal Overlay Background */
+  .modal-overlay {
+    position: fixed;
+    top: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 100%;
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(4px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    z-index: 1000;
+  }
+
+  .modal-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Modal Box */
+  .modal-content {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: 90%;
+    max-width: 800px;
+    max-height: 85dvh; 
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    transform: translateY(20px);
+    transition: transform 0.3s ease;
+  }
+
+  .modal-overlay.active .modal-content {
+    transform: translateY(0);
+  }
+
+  /* Header Area (Stays fixed at the top) */
+  .modal-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0; 
+  }
+
+  .modal-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+  }
+
+  /* Close Button (Unified for both modals) */
+  .modal-close {
+    color: var(--text-muted);
+    background: none;
+    border: none;
+    font-size: 2rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+  }
+  
+  /* Specific override to keep Dashboard close button in the corner */
+  #dashboardModal .modal-close {
+    position: absolute;
+    top: 1rem; 
+    right: 1rem;
+  }
+
+  .modal-close:hover {
+    color: var(--text);
+  }
+
+  /* Scrollable Content Area */
+  .modal-body {
+    padding: 1.5rem;
+    overflow-y: auto;
+    flex-grow: 1;
+    line-height: 1.6;
+    -webkit-overflow-scrolling: touch; 
+  }
+
+  .modal-body p {
+    margin-bottom: 1rem;
+    font-size: 0.95rem;
+    color: #cbd5e1; 
+  }
+
+  /* Mobile Specific Tweaks for Modal */
+  @media (max-width: 480px) {
+    .modal-content {
+      width: 95%;
+      max-height: 90dvh; 
+    }
+    .modal-header, .modal-body {
+      padding: 1rem;
+    }
+  }
+
+  /* Dashboard specific inputs & stats */
+  .input-group {
+    display: flex; gap: 0.5rem; margin-top: 1.5rem;
+  }
+  .input-group input {
+    flex: 1;
+    padding: 0.75rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+  }
+  
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 2rem;
+    display: none; 
+  }
+  .stat-box {
+    background: var(--bg);
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    text-align: center;
+  }
+  .stat-value { font-size: 1.5rem; font-weight: bold; color: var(--primary); }
+  .stat-label { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+</style>
+
+</head>
+<body>
+
+  <!-- Navigation Bar -->
+  <nav class="navbar">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+        <!-- Shifted the exclamation mark up by 2 grid units -->
+        <line x1="12" y1="7" x2="12" y2="11"></line>
+        <line x1="12" y1="14" x2="12.01" y2="14"></line>
+      </svg>
+      Alertify
+    </div>
+    <div class="nav-links">
+      <a href="#" onclick="openModal()">Dashboard</a>
+      <a href="#" id="openTermsLink">Terms</a>
+      <a href="#pricing">Pricing</a>
+      <!-- New Download Button in Nav -->
+    </div>
+  </nav>
+
+  <header>
+    <h1>Push Alerts. <span>Zero Friction.</span></h1>
+    <p class="subtitle">
+        No SMTP or DNS setup. No Login. No Tracking. Anonymous push notifications to <i><strong>multiple </strong></i> devices with a single HTTP POST or MQTT request.
+    </p>
+    <!-- Hero Download Button -->
+    <div class="hero-actions">
+      <a href="/alertify.apk" class="btn-hero" download>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        Download APK
+      </a>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+
+  <!-- Terms Modal -->
+
+
+
+
+  <div class="editor-wrapper">
+  <div class="editor">
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('python')">Python</button>
+      <button class="tab" onclick="switchTab('mqtt')">MQTT (py)</button>
+      <button class="tab" onclick="switchTab('curl')">cURL</button>
+      <button class="tab" onclick="switchTab('go')">Go</button>
+      <button class="tab" onclick="switchTab('node')">Node.js</button>
+    </div>
+    
+    <!-- Python (Requests) -->
+    <pre id="python" class="code-pane active">
+<span class="kw">import</span> requests
+
+url = <span class="str">"https://alertify.while0x1.com/send-alert"</span>
+payload = {
+    <span class="str">"projectId"</span>: <span class="str">"your_project_id"</span>,
+    <span class="str">"title"</span>: <span class="str">"SCADA Warning"</span>,
+    <span class="str">"message"</span>: <span class="str">"Pump station 4 pressure drop detected."</span>
+}
+headers = { <span class="str">"X-User-Id"</span>: <span class="str">"your_device_id"</span> }
+
+response = requests.<span class="func">post</span>(url, json=payload, headers=headers)
+<span class="func">print</span>(response.json())</pre>
+
+    <!-- MQTT (Paho) -->
+    <pre id="mqtt" class="code-pane">
+<span class="kw">import</span> paho.mqtt.client <span class="kw">as</span> mqtt
+<span class="kw">import</span> json
+
+<span class="com"># Connect to the Industrial Broker</span>
+client = mqtt.<span class="func">Client</span>(client_id=<span class="str">"industrial_gateway_01"</span>)
+client.<span class="func">username_pw_set</span>(<span class="str">"your_project_id"</span>, <span class="str">"your_app_id_key"</span>)
+
+client.<span class="func">connect</span>(<span class="str">"alertify.while0x1.com"</span>, <span class="num">1883</span>)
+
+<span class="com"># Send Structured JSON or Raw Strings</span>
+topic = <span class="str">"alertify/project/your_project_id"</span>
+payload = json.<span class="func">dumps</span>({<span class="str">"title"</span>: <span class="str">"Tank 1"</span>, <span class="str">"message"</span>: <span class="str">"High Level"</span>})
+
+client.<span class="func">publish</span>(topic, payload)
+client.<span class="func">disconnect</span>()</pre>
+
+    <!-- cURL -->
+    <pre id="curl" class="code-pane">
+curl -X POST <span class="str">"https://alertify.while0x1.com/send-alert"</span> \
+     -H <span class="str">"Content-Type: application/json"</span> \
+     -H <span class="str">"X-User-Id: your_device_id"</span> \
+     -d <span class="str">'{
+           "projectId": "your_project_id",
+           "title": "Terminal Alert",
+           "message": "Manual trigger from cURL"
+         }'</span></pre>
+
+    <!-- Go -->
+    <pre id="go" class="code-pane">
+<span class="kw">import</span> (
+    <span class="str">"bytes"</span>
+    <span class="str">"net/http"</span>
+)
+
+<span class="kw">func</span> <span class="func">main</span>() {
+    url := <span class="str">"https://alertify.while0x1.com/send-alert"</span>
+    jsonStr := []byte(<span class="str">`{"projectId":"your_project_id", "title":"SCADA Warning", "message":"Pump station 4..."}`</span>)
+    
+    req, _ := http.<span class="func">NewRequest</span>(<span class="str">"POST"</span>, url, bytes.<span class="func">NewBuffer</span>(jsonStr))
+    req.Header.Set(<span class="str">"X-User-Id"</span>, <span class="str">"your_device_id"</span>)
+    req.Header.Set(<span class="str">"Content-Type"</span>, <span class="str">"application/json"</span>)
+
+    client := &http.Client{}
+    client.<span class="func">Do</span>(req)
+}</pre>
+
+    <!-- Node.js -->
+    <pre id="node" class="code-pane">
+<span class="kw">const</span> response = <span class="kw">await</span> <span class="func">fetch</span>(<span class="str">'https://alertify.while0x1.com/send-alert'</span>, {
+  method: <span class="str">'POST'</span>,
+  headers: {
+    <span class="str">'Content-Type'</span>: <span class="str">'application/json'</span>,
+    <span class="str">'X-User-Id'</span>: <span class="str">'your_device_id'</span>
+  },
+  body: JSON.<span class="func">stringify</span>({
+    projectId: <span class="str">'your_project_id'</span>,
+    title: <span class="str">'SCADA Warning'</span>,
+    message: <span class="str">'Pump station 4 pressure drop detected.'</span>
+  })
+});</pre>
+  </div>
+</div>
+
+
+ <!-- SEO Context Section -->
+  <section class="use-cases" style="max-width: 800px; margin: 4rem auto; padding: 0 1rem;">
+    <div style="
+      background: var(--bg, #1a1a1a); 
+      border: 1px solid var(--border, #333); 
+      border-top: 4px solid var(--primary, #3b82f6); 
+      border-radius: 12px; 
+      padding: 2.5rem; 
+      box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);">
+      
+      <h2 style="font-size: 1.75rem; margin-top: 0; margin-bottom: 1rem; color: var(--text-main, #fff);">
+        Why Choose Alertify
+      </h2>
+      
+      <p style="color: var(--text-muted, #a3a3a3); font-size: 1.05rem; line-height: 1.7; margin-bottom: 2rem;">
+        Traditional alert services require complex setup, logins, and configurations. Alertify is built for engineers who want reliable notifications with zero friction.
+      </p>
+      
+      <div style="display: grid; gap: 1.75rem;">
+
+        <div style="display: flex; gap: 1rem; align-items: flex-start;">
+          <div style="color: var(--primary, #3b82f6); margin-top: 3px;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l3-9 5 18 3-9h5"/></svg>
+          </div>
+          <div>
+            <strong style="color: var(--text-main, #fff); font-size: 1.1rem; display: block; margin-bottom: 0.25rem;">IoT & SCADA Monitoring</strong>
+            <span style="color: var(--text-muted, #a3a3a3); line-height: 1.5; display: block;">Perfect for sensor monitoring, SCADA, and homelabs. If it can run <code>curl</code>, it can send an alert.</span>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 1rem; align-items: flex-start;">
+          <div style="color: var(--primary, #3b82f6); margin-top: 3px;">
+            <!-- Broadcast / Signal Icon for MQTT -->
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 12h.01m7-.01H12m7 .01H19" />
+              <path d="M12 21V7" />
+              <path d="M5 7l7-4 7 4" />
+              <path d="M12 7l7 4-7 4-7-4 7-4z" />
+            </svg>
+          </div>
+          <div>
+            <strong style="color: var(--text-main, #fff); font-size: 1.1rem; display: block; margin-bottom: 0.25rem;">Direct MQTT Alerts</strong>
+            <span style="color: var(--text-muted, #a3a3a3); line-height: 1.5; display: block;">
+              Connect PLCs and IoT hardware directly without middle-ware. Supports <strong>Raw String</strong> payloads for legacy systems and <strong>JSON</strong> for modern sensors.
+            </span>
+          </div>
+        </div>
+        
+        <!-- USP 1: Anonymity & No Tracking -->
+        <div style="display: flex; gap: 1rem; align-items: flex-start;">
+          <div style="color: var(--primary, #3b82f6); margin-top: 3px;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M8 11h8"/><path d="M12 15v-8"/></svg>
+          </div>
+          <div>
+            <strong style="color: var(--text-main, #fff); font-size: 1.1rem; display: block; margin-bottom: 0.25rem;">No Data Tracing</strong>
+            <span style="color: var(--text-muted, #a3a3a3); line-height: 1.5; display: block;">No emails, no phone numbers, no login screens.</span>
+          </div>
+        </div>
+
+        <!-- USP 2: One-to-Many Broadcast -->
+        <div style="display: flex; gap: 1rem; align-items: flex-start;">
+          <div style="color: var(--primary, #3b82f6); margin-top: 3px;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </div>
+          <div>
+            <strong style="color: var(--text-main, #fff); font-size: 1.1rem; display: block; margin-bottom: 0.25rem;">One-to-Many Project Broadcasts</strong>
+            <span style="color: var(--text-muted, #a3a3a3); line-height: 1.5; display: block;">A single HTTP POST maps to a project, not just a single phone.</span>
+          </div>
+        </div>
+
+        <!-- USP 3: Legacy & Infrastructure Agnostic -->
+
+
+        <!-- USP 4: Speed -->
+        <div style="display: flex; gap: 1rem; align-items: flex-start;">
+          <div style="color: var(--primary, #3b82f6); margin-top: 3px;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          </div>
+          <div>
+            <strong style="color: var(--text-main, #fff); font-size: 1.1rem; display: block; margin-bottom: 0.25rem;">Pain Free Setup</strong>
+            <span style="color: var(--text-muted, #a3a3a3); line-height: 1.5; display: block;">Download the app, grab your ID, and trigger your first alert in moments.</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+
+  <div style="border: 1px solid var(--border, #262626); border-radius: 1rem; padding: 2rem; font-family: sans-serif; max-width: 800px;display:none;">
+  
+  <!-- Header -->
+  <div style="margin-bottom: 2rem;">
+    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+      <div style="color: var(--primary, #3b82f6);">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h.01m7-.01H12m7 .01H19"/><path d="M12 21V7"/><path d="M5 7l7-4 7 4"/><path d="M12 7l7 4-7 4-7-4 7-4z"/></svg>
+      </div>
+      <h2 style="color: var(--text-main, #fff); margin: 0; font-size: 1.5rem; letter-spacing: -0.025em;">Direct MQTT Alerts</h2>
+    </div>
+    <p style="color: var(--primary, #3b82f6); font-weight: 500; margin: 0 0 1rem 0; font-size: 0.95rem;">Universal Connectivity for the Modern Grid</p>
+    <p style="color: var(--text-muted, #a3a3a3); line-height: 1.6; margin: 0;">Integrate your industrial hardware with mobile push notifications in seconds. Our Universal Ingest Pipeline supports everything from high-end IoT sensors to legacy PLC systems without middle-ware.</p>
+  </div>
+
+  <hr style="border: 0; border-top: 1px solid var(--border, #262626); margin: 2rem 0;">
+
+  <!-- Content Grid -->
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem;">
+    
+    <!-- Payload Support -->
+    <div>
+      <h3 style="color: var(--text-main, #fff); font-size: 1.1rem; margin-bottom: 1rem;">Flexible Payload Support</h3>
+      <div style="display: grid; gap: 1rem;">
+        <div>
+          <strong style="color: var(--text-main, #fff); font-size: 0.9rem; display: block; margin-bottom: 0.25rem;">JSON Objects</strong>
+          <span style="color: var(--text-muted, #a3a3a3); font-size: 0.85rem; line-height: 1.4;">Ideal for modern edge devices. Send structured data for custom titles.</span>
+          <code style="display: block; background: #000; padding: 0.5rem; border-radius: 0.4rem; color: #10b981; font-size: 0.75rem; margin-top: 0.5rem;">{"title": "Pump 1", "message": "Vibration detected"}</code>
+        </div>
+        <div>
+          <strong style="color: var(--text-main, #fff); font-size: 0.9rem; display: block; margin-bottom: 0.25rem;">Raw Strings</strong>
+          <span style="color: var(--text-muted, #a3a3a3); font-size: 0.85rem; line-height: 1.4;">Perfect for legacy PLCs and SCADA systems. Trigger alerts with simple text.</span>
+          <code style="display: block; background: #000; padding: 0.5rem; border-radius: 0.4rem; color: #f59e0b; font-size: 0.75rem; margin-top: 0.5rem;">Critical Temperature Warning</code>
+        </div>
+      </div>
+    </div>
+
+    <!-- Security -->
+    <div>
+      <h3 style="color: var(--text-main, #fff); font-size: 1.1rem; margin-bottom: 1rem;">Industrial-Grade Security</h3>
+      <ul style="list-style: none; padding: 0; margin: 0; display: grid; gap: 1rem;">
+        <li style="font-size: 0.85rem; line-height: 1.4;">
+          <span style="color: var(--text-main, #fff); font-weight: 600;">Encrypted Transport:</span> 
+          <span style="color: var(--text-muted, #a3a3a3);">Full TLS/SSL support for secure factory-to-cloud transmission.</span>
+        </li>
+        <li style="font-size: 0.85rem; line-height: 1.4;">
+          <span style="color: var(--text-main, #fff); font-weight: 600;">Granular Auth:</span> 
+          <span style="color: var(--text-muted, #a3a3a3);">Isolated projects via Project UUID and Security Key via EMQX.</span>
+        </li>
+        <li style="font-size: 0.85rem; line-height: 1.4;">
+          <span style="color: var(--text-main, #fff); font-weight: 600;">Zero-Trace:</span> 
+          <span style="color: var(--text-muted, #a3a3a3);">Minimal metadata footprint to prioritize data privacy.</span>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Specs Table -->
+  <div style="background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 0.75rem; overflow: hidden;">
+    <div style="padding: 0.75rem 1rem; border-bottom: 1px solid rgba(59, 130, 246, 0.2); background: rgba(59, 130, 246, 0.1);">
+      <span style="color: var(--primary, #3b82f6); font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Technical Specs for Developers</span>
+    </div>
+    <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem; color: var(--text-muted, #a3a3a3);">
+      <tr style="border-bottom: 1px solid var(--border, #262626);">
+        <td style="padding: 0.75rem 1rem; color: var(--text-main, #fff); font-weight: 500; width: 35%;">Protocol</td>
+        <td style="padding: 0.75rem 1rem; font-family: monospace;">MQTT v3.1.1 / v5.0</td>
+      </tr>
+      <tr style="border-bottom: 1px solid var(--border, #262626);">
+        <td style="padding: 0.75rem 1rem; color: var(--text-main, #fff); font-weight: 500;">Auth</td>
+        <td style="padding: 0.75rem 1rem; font-family: monospace;">Project ID / API Key</td>
+      </tr>
+      <tr style="border-bottom: 1px solid var(--border, #262626);">
+        <td style="padding: 0.75rem 1rem; color: var(--text-main, #fff); font-weight: 500;">Topic Path</td>
+        <td style="padding: 0.75rem 1rem; font-family: monospace; color: var(--primary, #3b82f6);">alertify/project/{project_id}</td>
+      </tr>
+      <tr style="border-bottom: 1px solid var(--border, #262626);">
+        <td style="padding: 0.75rem 1rem; color: var(--text-main, #fff); font-weight: 500;">Max Payload</td>
+        <td style="padding: 0.75rem 1rem;">64 KB</td>
+      </tr>
+      <tr>
+        <td style="padding: 0.75rem 1rem; color: var(--text-main, #fff); font-weight: 500;">Delivery</td>
+        <td style="padding: 0.75rem 1rem;">Firebase Cloud Messaging (High Priority)</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+  <div id="pricing" class="pricing-container">
+    <!-- Free Tier (Button Removed) -->
+    <div class="card">
+      <h3>Hacker</h3>
+      <div class="price">$0<span>/mo</span></div>
+      <p style="color: var(--text-muted); font-size: 0.9rem;">Perfect for local testing and personal IoT projects.</p>
+      <ul class="features">
+        <li>10 alerts per month</li>
+        <li>1 Project</li>
+        <li>Community Support</li>
+      </ul>
+      <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 1.5rem; text-align: center;">Download the app to begin.</p>
+    </div>
+
+    <!-- Pro Tier -->
+    <div class="card pro">
+      <div class="badge">POPULAR</div>
+      <h3>Pro</h3>
+      <div class="price">$5.99 AUD<span>/mo</span></div>
+      <p style="color: var(--text-muted); font-size: 0.9rem;">For heavy data logging and high-frequency alerts.</p>
+      <ul class="features">
+        <li>5,000 alerts per month</li>
+        <li>10 Projects</li>
+        <li>Priority Delivery</li>
+      </ul>
+      <button class="btn btn-primary" onclick="openUpgradeModal()" disabled>Upgrade to Pro</button>
+
+<!-- Dashboard Modal -->
+  <div class="modal-overlay" id="dashboardModal" onclick="closeModal(event)">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <button class="modal-close" onclick="closeModal(event)">&times;</button>
+      <h2>Your Dashboard</h2>
+      <p style="color: var(--text-muted); font-size: 0.9rem;">Enter your Device ID or API Key to view your usage statistics.</p>
+      
+      <div class="input-group">
+        <input type="text" id="userIdInput" placeholder="Enter X-User-Id...">
+        <button class="btn btn-primary" style="width: auto;" onclick="fetchStats()">Lookup</button>
+      </div>
+
+      <div id="errorMessage" style="color: #ef4444; margin-top: 1rem; font-size: 0.9rem; display: none;"></div>
+
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-box">
+          <div class="stat-value" id="statTier">-</div>
+          <div class="stat-label">Current Tier</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="statUsage">-</div>
+          <div class="stat-label">Monthly Usage</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="statTotal">-</div>
+          <div class="stat-label">All-Time Alerts</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="statProjects">-</div>
+          <div class="stat-label">Projects</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+<!-- Upgrade to Pro Modal -->
+<!-- Upgrade to Pro Modal -->
+<!-- Upgrade to Pro Modal -->
+<div class="modal-overlay" id="upgradeModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Upgrade to Pro</h2>
+      <button class="modal-close" onclick="closeUpgradeModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p>Enter your Device ID or API Key to link your Pro subscription.</p>
+      
+      <div class="input-group" style="margin-bottom: 1rem;">
+        <input type="text" id="upgradeUserIdInput" placeholder="Enter X-User-Id...">
+      </div>
+
+      <!-- Terms Agreement Checkbox -->
+      <div style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 1.5rem; padding: 0.5rem; background: var(--bg); border-radius: 6px; border: 1px solid var(--border);">
+        <input type="checkbox" id="termsCheckbox" style="margin-top: 4px; cursor: pointer;">
+        <label for="termsCheckbox" style="font-size: 0.85rem; color: var(--text-muted); cursor: pointer;">
+          I agree to the <a href="#" id="viewTermsLink" style="color: var(--primary); text-decoration: underline;">Terms & Conditions</a>
+        </label>
+      </div>
+
+      <button class="btn btn-primary" id="checkoutBtn" onclick="redirectToStripe()">Continue to Checkout</button>
+      
+    </div>
+  </div>
+</div>
+
+
+
+<script>
+// --- Integrated Upgrade Modal Logic ---
+const upgradeModal = document.getElementById('upgradeModal');
+const upgradeInput = document.getElementById('upgradeUserIdInput');
+// New variables for the checkbox and link
+const termsCheckbox = document.getElementById('termsCheckbox');
+const viewTermsLink = document.getElementById('viewTermsLink');
+
+function openUpgradeModal() {
+  upgradeModal.classList.add('active');
+}
+
+function closeUpgradeModal() {
+  upgradeModal.classList.remove('active');
+  upgradeInput.value = ''; 
+  // Reset checkbox when closing
+  if (termsCheckbox) termsCheckbox.checked = false;
+}
+
+// Close when clicking outside the box
+upgradeModal.addEventListener('click', function(event) {
+  if (event.target === upgradeModal) {
+    closeUpgradeModal();
+  }
+});
+
+// Link the 'view terms' inside the upgrade modal to the main Terms Modal
+if (viewTermsLink) {
+  viewTermsLink.addEventListener('click', function(e) {
+    e.preventDefault();
+    // Open your existing terms modal
+    document.getElementById("termsModal").classList.add("active");
+  });
+}
+
+// The fully upgraded redirect logic
+async function redirectToStripe() {
+  const userId = upgradeInput.value.trim();
+  
+  // 1. Basic ID Check
+  if (!userId) {
+    alert("Please enter your Device ID to continue.");
+    return;
+  }
+
+  // 2. Checkbox Validation (The Missing Link)
+  if (!termsCheckbox || !termsCheckbox.checked) {
+    alert("You must agree to the Terms & Conditions before proceeding to checkout.");
+    // Visual feedback: Highlight the checkbox area
+    termsCheckbox.parentElement.style.borderColor = "#ef4444";
+    return;
+  }
+
+  // Reset border color if it was red from a previous fail
+  termsCheckbox.parentElement.style.borderColor = "var(--border)";
+
+  // 3. THE PRE-FLIGHT CHECK
+  try {
+    const response = await fetch('/user-stats', {
+      headers: { 'X-User-Id': userId }
+    });
+
+    if (!response.ok) {
+      alert("⚠️ We couldn't find that Device ID. Please make sure you typed it exactly as it appears in your code.");
+      return; 
+    }
+  } catch (error) {
+    console.error("Error verifying ID:", error);
+    alert("Could not verify ID. Please try again.");
+    return;
+  }
+
+  // 4. Send to Stripe
+  // Using your specific payment link
+  const stripeBaseUrl = "https://buy.stripe.com/test_3cIaEP7lRcn7c7ucGW6Ri00";
+  const checkoutUrl = `${stripeBaseUrl}?client_reference_id=${userId}`;
+  
+  window.location.href = checkoutUrl;
+}
+
+
+
+</script>
+    <script>
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.code-pane').forEach(c => c.classList.remove('active'));
+      
+      event.target.classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+    }
+
+    function openModal() { document.getElementById('dashboardModal').classList.add('active'); }
+    function closeModal(e) { document.getElementById('dashboardModal').classList.remove('active'); }
+
+    async function fetchStats() {
+      const userId = document.getElementById('userIdInput').value.trim();
+      const errorMsg = document.getElementById('errorMessage');
+      const statsGrid = document.getElementById('statsGrid');
+      
+      if (!userId) {
+        errorMsg.textContent = "Please enter an ID.";
+        errorMsg.style.display = 'block';
+        return;
+      }
+
+      errorMsg.style.display = 'none';
+
+      try {
+        const response = await fetch('/user-stats', {
+          headers: { 'X-User-Id': userId }
+        });
+
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.detail || "Failed to fetch stats");
+        }
+
+        const data = await response.json();
+        
+        // Populate the data
+        document.getElementById('statTier').textContent = data.tier;
+        // Make the tier green if Pro
+        document.getElementById('statTier').style.color = data.tier === 'Pro' ? '#10b981' : 'var(--primary)';
+        
+        document.getElementById('statUsage').textContent = `${data.requestsThisMonth} / ${data.monthlyLimit}`;
+        document.getElementById('statTotal').textContent = data.totalAllTimeRequests;
+        document.getElementById('statProjects').textContent = data.projectsCreated;
+
+        // Reveal the grid
+        statsGrid.style.display = 'grid';
+
+      } catch (error) {
+        errorMsg.textContent = error.message;
+        errorMsg.style.display = 'block';
+        statsGrid.style.display = 'none';
+      }
+    }
+  </script>
+
+
+<!-- Terms Modal -->
+<div id="termsModal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 style="margin: 0; font-size: 1.5rem;">End-User License Agreement</h2>
+      <button id="closeTermsBtn" class="modal-close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p><strong>Introduction</strong><br>
+      This End-User License Agreement (“EULA”) is a legal agreement between you (either an individual or a single entity) and While One Automation (“Licensor”) for the use of Alertify (“Software”) and Application Programming Interface ("API"). This EULA governs your use of the Software provided by the Licensor. By clicking “I Agree” or installing or using the Software, you agree to be bound by the terms of this EULA.</p>
+
+      <p><strong>License Grant</strong><br>
+      Licensor grants you a revocable, non-exclusive, non-transferable, limited license to download, install, and use the Software solely for your personal and internal business purposes strictly in accordance with the terms of this Agreement.</p>
+
+      <p><strong>Restrictions on Use</strong><br>
+      You agree not to, and you will not permit others to:<br>
+      - Copy, modify, or create derivative works of the Software.<br>
+      - Distribute, transfer, sublicense, lease, lend, or rent the Software to any third party.<br>
+      - Reverse engineer, decompile or disassemble the Software, except to the extent expressly permitted by applicable law.<br>
+      - Remove, alter, or obscure any proprietary notices on the Software.<br>
+      - Use the Software in any manner that could damage, disable, overburden, or impair the Software.<br>
+      - Use the Software to create or distribute any malicious software or for any unlawful purpose.</p>
+
+      <p><strong>API Abuse & Suspension</strong><br>
+      Licensor reserves the right to immediately suspend or terminate your access to the Application Programming Interface ("API") without prior notice and without refund if you attempt to bypass rate limits, flood the server with requests, use the API to transmit spam, or otherwise engage in abusive behavior that threatens the stability or security of the Software.</p>
+
+      <p><strong>Jurisdiction</strong><br>
+      This EULA and any disputes arising out of or in connection with it will be governed by and construed in accordance with the laws of Australia, without regard to its conflict of laws principles. Any legal actions or proceedings arising out of this EULA shall be brought exclusively in the courts of Western Australia.</p>
+
+      <p><strong>Intellectual Property & Copyright Infringement</strong><br>
+      The Software and all rights, title, and interest in and to the Software, including all intellectual property rights therein, are and will remain the exclusive property of the Licensor. You agree to notify the Licensor promptly if you become aware of any infringement of the Licensor’s intellectual property rights in the Software.</p>
+
+      <p><strong>Termination of Licensing</strong><br>
+      Licensor may terminate this EULA at any time if you fail to comply with any term(s) of this Agreement. Upon termination, you must cease all use of the Software and destroy all copies, full or partial, of the Software.</p>
+
+      <p><strong>Warranty Disclaimer</strong><br>
+      THE SOFTWARE AND API ARE PROVIDED “AS IS”, "AS AVAILABLE" AND WITH ALL FAULTS. LICENSOR MAKES NO WARRANTIES, WHETHER EXPRESS, IMPLIED, OR STATUTORY, INCLUDING BUT NOT LIMITED TO THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT. YOU BEAR THE ENTIRE RISK AS TO SELECTING THE SOFTWARE FOR YOUR PURPOSES AND AS TO THE QUALITY AND PERFORMANCE OF THE SOFTWARE.</p>
+
+      <p><strong>Limitations of Liability</strong><br>
+      TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL LICENSOR BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS OR REVENUES, WHETHER INCURRED DIRECTLY OR INDIRECTLY, OR ANY LOSS OF DATA, USE, GOODWILL, OR OTHER INTANGIBLE LOSSES, RESULTING FROM (A) YOUR USE OR INABILITY TO USE THE SOFTWARE; (B) ANY UNAUTHORIZED ACCESS TO OR USE OF OUR SERVERS AND/OR ANY PERSONAL INFORMATION STORED THEREIN; (C) ANY INTERRUPTION OR CESSATION OF TRANSMISSION TO OR FROM THE SOFTWARE; (D) ANY BUGS, VIRUSES, TROJAN HORSES, OR THE LIKE THAT MAY BE TRANSMITTED TO OR THROUGH OUR SOFTWARE BY ANY THIRD PARTY; (E) ANY ERRORS OR OMISSIONS IN ANY CONTENT OR FOR ANY LOSS OR DAMAGE INCURRED AS A RESULT OF YOUR USE OF ANY CONTENT POSTED, EMAILED, TRANSMITTED, OR OTHERWISE MADE AVAILABLE THROUGH THE SOFTWARE; AND/OR (F) THE DEFAMATORY, OFFENSIVE, OR ILLEGAL CONDUCT OF ANY THIRD PARTY.</p>
+
+      <p><strong>Limits on Damage Liability</strong><br>
+      Licensor’s total liability to you for any damages (regardless of the form of action) shall not exceed the amount actually paid by you for the Software in the preceding 3 months.</p>
+
+      <p><strong>Control of Software Distribution</strong><br>
+      You may not distribute or make the Software available over a network where it could be used by multiple devices at the same time. You may not rent, lease, lend, sell, redistribute, or sublicense the Software.</p>
+
+      <p><strong>Updates & Changes</strong><br>
+      Licensor reserves the right, at its sole discretion, to modify or replace this EULA at any time. If a revision is material, we will provide at least 30 days’ notice prior to any new terms taking effect. By continuing to access or use our Software after those revisions become effective, you agree to be bound by the revised terms.</p>
+
+      <p><strong>Consent to Use of Data</strong><br>
+      You agree that Licensor may collect and use technical data and related information, including but not limited to technical information about your device, system and application software, and peripherals, that is gathered periodically to facilitate the provision of software updates, product support, and other services to you (if any) related to the Software. Licensor may use this information, as long as it is in a form that does not personally identify you, to improve its products or to provide services or technologies to you.</p>
+
+      <p>By installing or using the Software, you acknowledge that you have read this Agreement, understand it, and agree to be bound by its terms and conditions.</p>
+      
+      <p><strong>Alertify - While One Automation</strong></p>
+    </div>
+  </div>
+</div>
+
+<script>
+  const termsModal = document.getElementById("termsModal");
+  const openTermsBtn = document.getElementById("openTermsLink");
+  const closeTermsBtn = document.getElementById("closeTermsBtn");
+
+  // Open modal using the 'active' class to match your CSS
+  openTermsBtn.addEventListener("click", function(event) {
+    event.preventDefault(); // Stop link from jumping to top of page
+    termsModal.classList.add("active");
+    document.body.style.overflow = "hidden"; // Prevent background scrolling
+  });
+
+  // Close modal via button
+  closeTermsBtn.addEventListener("click", function() {
+    termsModal.classList.remove("active");
+    document.body.style.overflow = "auto";
+  });
+
+  // Close modal when clicking outside the content box
+  termsModal.addEventListener("click", function(event) {
+    if (event.target === termsModal) {
+      termsModal.classList.remove("active");
+      document.body.style.overflow = "auto";
+    }
+  });
+</script>
+
+
+
+
+</body>
+</html>
