@@ -28,6 +28,8 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 
 import 'models/mqtt_log.dart';
+import 'models/alert_model.dart';
+
 
 // Isar will generate this file
 
@@ -39,53 +41,36 @@ const String FASTAPI_BASE_URL = 'https://alertify.while0x1.com';
 // --- NEW GLOBAL FUNCTION TO CACHE MESSAGES ---
 // This function needs to be outside any class and a top-level function
 // because it's called from the background handler.
-Future<void> _cacheMessage(RemoteMessage message) async {
-  // Ensure Firebase is initialized for background tasks if it hasn't been already
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  final prefs = await SharedPreferences.getInstance();
-
-  // Get current cached messages
-  final List<String> cachedMessagesJson = prefs.getStringList('cached_fcm_messages') ?? [];
-
-  // Extract messageId for deduplication, or generate one if missing (though your server should provide it)
-  final String? messageId = message.data['messageId'];
-  if (messageId == null) {
-    print('WARNING: Message received without messageId. Cannot deduplicate accurately. Message: ${message.notification?.title}');
-    // If messageId is critical and always expected, you might choose to skip caching this message.
-    // For now, we'll proceed but this might lead to duplicates if the server doesn't send messageId.
-  }
-
-  // Convert the RemoteMessage to a storable Map
-  final Map<String, dynamic> messageMap = {
-    'notification': message.notification?.toMap(),
-    'data': message.data,
-    'messageId': messageId, // Store the messageId explicitly in the cached map
-    'receivedTimestamp': DateTime.now().millisecondsSinceEpoch, // When it was received
-  };
-
-  // Check for duplicates before adding to cache using messageId
-  bool isDuplicate = cachedMessagesJson.any((jsonString) {
-    final Map<String, dynamic> existingMessage = jsonDecode(jsonString);
-    return existingMessage['messageId'] == messageId && messageId != null;
-  });
-
-  if (!isDuplicate) {
-    cachedMessagesJson.add(jsonEncode(messageMap));
-    await prefs.setStringList('cached_fcm_messages', cachedMessagesJson);
-    print('FCM Message cached: ${message.notification?.title} (ID: $messageId)');
-  } else {
-    print('FCM Message (ID: $messageId) already in cache, skipping.');
-  }
-}
 
 // Background message handler
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  print('FCM Background Message received: ${message.notification?.title}');
-  print('FCM Background Message received. OS handled notification display.');
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await Hive.initFlutter();
 
-  // --- MODIFICATION: Cache the message in the background handler ---
-  await _cacheMessage(message);
+  // Isolate safety: Ensure the adapter is registered and box is open in the background process
+  if (!Hive.isAdapterRegistered(2)) {
+    Hive.registerAdapter(AlertModelAdapter());
+  }
+  final box = await Hive.openBox<AlertModel>('alerts_box');
+
+  final String? messageId = message.data['messageId'];
+  if (messageId == null) return; // Drop malformed messages silently to prevent crashes
+
+  // O(1) Instant Deduplication Check
+  if (!box.containsKey(messageId)) {
+    final newAlert = AlertModel(
+      id: messageId,
+      title: message.notification?.title ?? message.data['title'] ?? 'System Alert',
+      message: message.notification?.body ?? message.data['message'] ?? 'An event was registered but no details were provided.',
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      projectId: message.data['projectId'],
+      severity: message.data['severity'] ?? 'info',
+    );
+
+    await box.put(messageId, newAlert); // Instantly saves to disk!
+    print('FCM Background Alert Saved to Hive: ${newAlert.title}');
+  }
 }
 
 // Notification plugin instance
@@ -124,6 +109,7 @@ Future<void> _showNotification(RemoteMessage message) async {
 }
 
 late Box<MqttLog> logBox;
+late Box<AlertModel> alertsBox; // Add this line
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -134,9 +120,12 @@ void main() async {
 
     // Register the blueprint you just built
     Hive.registerAdapter(MqttLogAdapter());
+    Hive.registerAdapter(AlertModelAdapter()); // Add this line
 
     // Open the database box
     logBox = await Hive.openBox<MqttLog>('mqtt_logs');
+    alertsBox = await Hive.openBox<AlertModel>('alerts_box'); // Add this line
+
 
  // Change this line to point to your new drawable
  const AndroidInitializationSettings initializationSettingsAndroid =
@@ -237,21 +226,21 @@ class MyApp extends StatelessWidget {
 }
 
 class NotificationProvider with ChangeNotifier {
-  List<Map<String, dynamic>> notifications = [];
+  List<AlertModel> notifications = []; // Now uses the strongly typed model
   List<Map<String, String>> projects = [];
   String? fcmToken;
   bool _isNotificationsMuted = false;
   String? _userId;
 
   // --- NEW: List to store IDs of deleted messages ---
-  List<String> _deletedMessageIds = [];
+
 
   bool get isNotificationsMuted => _isNotificationsMuted;
   String? get userId => _userId;
 
-  static const int MAX_MESSAGES_COUNT = 500;
+  static const int MAX_MESSAGES_COUNT = 1000;
 
-  static const int MAX_DELETED_MESSAGES_COUNT = 1000; // Limit deleted message IDs to prevent excessive storage
+
 
   final Completer<void> _initCompleter = Completer<void>();
   Future<void> get initialized => _initCompleter.future;
@@ -265,7 +254,6 @@ class NotificationProvider with ChangeNotifier {
     await _getOrCreateUserId();
     await _setupFCM();
     // --- NEW: Process any messages cached while the app was in the background/closed ---
-    await _processCachedNotifications();
     _initCompleter.complete();
   }
 
@@ -351,26 +339,21 @@ class NotificationProvider with ChangeNotifier {
       print('Subscribed to topic: project_${project['id']}');
     }
 
-    final savedNotifications = prefs.getString('notifications');
-    if (savedNotifications != null) {
-      notifications = List<Map<String, dynamic>>.from(
-        (jsonDecode(savedNotifications) as List)
-            .map((item) => Map<String, dynamic>.from(item)),
-      );
-    }
+
 
     // --- NEW: Load deleted message IDs ---
-    _deletedMessageIds = prefs.getStringList('deleted_fcm_message_ids') ?? [];
+
 
     _isNotificationsMuted = prefs.getBool('isNotificationsMuted') ?? false;
 
-    while (notifications.length > MAX_MESSAGES_COUNT) {
-        notifications.removeLast();
-    }
-    // --- NEW: Trim deleted message IDs if too many ---
-    while (_deletedMessageIds.length > MAX_DELETED_MESSAGES_COUNT) {
-      _deletedMessageIds.removeAt(0); // Remove oldest
-    }
+    notifications = alertsBox.values.toList();
+    notifications.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+    if (prefs.containsKey('notifications')) {
+        await prefs.remove('notifications');
+        await prefs.remove('deleted_fcm_message_ids');
+        print('Legacy SharedPreferences alerts purged.');
+      }
 
     notifyListeners();
   }
@@ -380,8 +363,6 @@ class NotificationProvider with ChangeNotifier {
     await prefs.setString('projects', jsonEncode(projects));
     await prefs.setString('notifications', jsonEncode(notifications));
     await prefs.setBool('isNotificationsMuted', _isNotificationsMuted);
-    // --- NEW: Save deleted message IDs ---
-    await prefs.setStringList('deleted_fcm_message_ids', _deletedMessageIds);
   }
 
   // --- NEW: Clear all local data on account deletion ---
@@ -401,11 +382,11 @@ class NotificationProvider with ChangeNotifier {
       // 2. Clear the physical storage on the device
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear(); // This completely wipes all Alertify data saved on the phone
+      await alertsBox.clear(); // Wipes all alerts from Hiv
 
       // 3. Reset all in-memory variables back to default
       notifications = [];
       projects = [];
-      _deletedMessageIds = [];
       fcmToken = null;
       _userId = null;
       _isNotificationsMuted = false;
@@ -433,82 +414,38 @@ class NotificationProvider with ChangeNotifier {
   }
 
   // --- NEW: Helper to add a message to the UI, with deduplication and deleted check ---
-  Future<void> _addOrUpdateNotification(Map<String, dynamic> messageData) async {
-    final String? messageId = messageData['messageId'];
-    if (messageId == null) {
-      print('Warning: Notification data without messageId. Cannot guarantee deduplication.');
-    }
+  Future<void> _addOrUpdateNotification(RemoteMessage message) async {
+      final String? messageId = message.data['messageId'];
+      if (messageId == null) return;
 
-    // 1. Check if it's a deleted message
-    if (messageId != null && _deletedMessageIds.contains(messageId)) {
-      print('Skipping message $messageId: It was previously deleted by the user.');
-      return;
-    }
+      // Automatic Deduplication via Hive Keys
+      if (!alertsBox.containsKey(messageId)) {
+        final newAlert = AlertModel(
+          id: messageId,
+          title: message.notification?.title ?? message.data['title'] ?? 'System Alert',
+          message: message.notification?.body ?? message.data['message'] ?? 'No details provided.',
+          timestamp: _extractTimestamp(message), // Re-use your helper function
+          projectId: message.data['projectId'],
+          severity: message.data['severity'] ?? 'info',
+        );
 
-    // 2. Check for duplication among existing notifications
-    final existingIndex = notifications.indexWhere((n) => n['messageId'] == messageId && messageId != null);
+        await alertsBox.put(messageId, newAlert); // Save to disk
 
-    if (existingIndex != -1) {
-      // Message already exists, potentially update it if content changes are expected
-      // For now, we'll just skip to avoid visual "flicker" for same message.
-      print('Message (ID: $messageId) already present in UI, skipping addition.');
-      return;
-    } else {
-      // Add new message
-      //'title': messageData['notification']?['title'] ?? messageData['data']?['title'] ?? 'No Title',
-      // 'message': messageData['notification']?['body'] ?? messageData['data']?['message'] ?? 'No Message',
-      // Check if message has title and content or is a buggy message
-      if (messageData['title'] != 'No Title' && messageData['message'] != 'No Message')
-        {
-          notifications.insert(0, messageData);
-          print('Adding new message to UI: ${messageData['title']} (ID: $messageId)');
+        notifications.insert(0, newAlert); // Add to UI memory
+        notifications.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
+        // Enforce limits and physically delete old records from disk
+        if (notifications.length > MAX_MESSAGES_COUNT) {
+          final oldest = notifications.removeLast();
+          await alertsBox.delete(oldest.id);
         }
 
-      while (notifications.length > MAX_MESSAGES_COUNT) {
-        notifications.removeLast();
+        notifyListeners();
       }
-      await _saveData();
-      notifyListeners();
     }
-  }
 
   // --- NEW: Process messages that were cached while the app was not active ---
-  Future<void> _processCachedNotifications() async {
-    final prefs = await SharedPreferences.getInstance();
-    final List<String> cachedMessagesJson = prefs.getStringList('cached_fcm_messages') ?? [];
-    List<Map<String, dynamic>> messagesToProcess = [];
 
-    for (String jsonString in cachedMessagesJson) {
-      try {
-        messagesToProcess.add(jsonDecode(jsonString));
-      } catch (e) {
-        print('Error decoding cached message JSON: $e');
-      }
-    }
-
-    // Clear cache immediately after reading
-    await prefs.remove('cached_fcm_messages');
-    print('Cleared cached FCM messages from SharedPreferences.');
-
-    // Sort messages by receivedTimestamp if available, to process in order
-    messagesToProcess.sort((a, b) => (a['receivedTimestamp'] as int? ?? 0)
-        .compareTo(b['receivedTimestamp'] as int? ?? 0));
-
-    for (final messageData in messagesToProcess) {
-      // Reconstruct a RemoteMessage like object for compatibility or just use the map
-      // For _addOrUpdateNotification, we can directly use the map
-      final Map<String, dynamic> notificationData = {
-        'title': messageData['notification']?['title'] ?? messageData['data']?['title'] ?? 'No Title',
-        'message': messageData['notification']?['body'] ?? messageData['data']?['message'] ?? 'No Message',
-        'timestamp': _extractTimestamp(RemoteMessage(data: messageData['data'])), // Use helper to extract
-        'projectId': messageData['data']?['projectId'],
-        'messageId': messageData['messageId'], // Crucial for deduplication
-      };
-      await _addOrUpdateNotification(notificationData);
-    }
-    print('Finished processing cached notifications.');
-  }
 
   Future<void> _setupFCM() async {
     final messaging = FirebaseMessaging.instance;
@@ -534,65 +471,22 @@ class NotificationProvider with ChangeNotifier {
 
     FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
       print('FCM Foreground Message received: ${message.notification?.title}');
-      
       // Extract common message data including messageId
-      final String? messageId = message.data['messageId'];
-      final Map<String, dynamic> notificationData = {
-        'title': message.notification?.title ?? message.data['title'] ?? 'No Title',
-        'message': message.notification?.body ?? message.data['message'] ?? 'No Message',
-        'timestamp': _extractTimestamp(message),
-        'projectId': message.data['projectId'],
-        'messageId': messageId, // Pass messageId for deduplication
-      };
-
-      // --- MODIFICATION: Add message to UI directly if foreground, or cache if it was meant for background and somehow came here ---
-      // This listener typically only fires when the app is in the foreground.
-      // We directly add to the UI and then potentially show a local notification.
-      await _addOrUpdateNotification(notificationData);
-
+      await _addOrUpdateNotification(message);
       if (!_isNotificationsMuted) {
         await _showNotification(message);
-      } else {
-        print('Notifications muted, not showing local notification.');
       }
-      // notifyListeners() is called within _addOrUpdateNotification
     });
 
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
       print('FCM Message opened app from background: ${message.notification?.title}');
-      // --- MODIFICATION: When app opened via notification, process cached messages ---
-      // The message that opened the app is often *also* stored in the cache by the background handler.
-      // So, processing the cache ensures it's added along with any others received while inactive.
-      await _processCachedNotifications();
-      // If _processCachedNotifications handles it, we don't need to add it here again.
-      // However, if the message was not cached by the background handler (e.g., due to an issue),
-      // we should ensure it's still displayed. The _addOrUpdateNotification will deduplicate.
-      final String? messageId = message.data['messageId'];
-      final Map<String, dynamic> notificationData = {
-        'title': message.notification?.title ?? message.data['title'] ?? 'No Title',
-        'message': message.notification?.body ?? message.data['message'] ?? 'No Message',
-        'timestamp': _extractTimestamp(message),
-        'projectId': message.data['projectId'],
-        'messageId': messageId,
-      };
-      await _addOrUpdateNotification(notificationData);
+      await _addOrUpdateNotification(message);
     });
 
     final initialMessage = await messaging.getInitialMessage();
     if (initialMessage != null) {
       print('FCM App launched from terminated state via message: ${initialMessage.notification?.title}');
-      // --- MODIFICATION: When app launched from terminated state via message, process cached messages ---
-      // Similar to onMessageOpenedApp, ensure all cached messages are processed.
-      await _processCachedNotifications();
-      final String? messageId = initialMessage.data['messageId'];
-      final Map<String, dynamic> notificationData = {
-        'title': initialMessage.notification?.title ?? initialMessage.data['title'] ?? 'No Title',
-        'message': initialMessage.notification?.body ?? initialMessage.data['message'] ?? 'No Message',
-        'timestamp': _extractTimestamp(initialMessage),
-        'projectId': initialMessage.data['projectId'],
-        'messageId': messageId,
-      };
-      await _addOrUpdateNotification(notificationData);
+      await _addOrUpdateNotification(initialMessage);
     }
   }
 
@@ -738,23 +632,15 @@ class NotificationProvider with ChangeNotifier {
   }
 
   // --- MODIFICATION: Mark message as deleted using its messageId ---
-  Future<void> deleteNotification(int index) async {
+Future<void> deleteNotification(int index) async {
     if (index >= 0 && index < notifications.length) {
-      final deletedMessage = notifications.removeAt(index);
-      final String? messageId = deletedMessage['messageId'];
-      if (messageId != null && !_deletedMessageIds.contains(messageId)) {
-        _deletedMessageIds.add(messageId);
-        // Trim deleted message IDs if necessary
-        while (_deletedMessageIds.length > MAX_DELETED_MESSAGES_COUNT) {
-          _deletedMessageIds.removeAt(0); // Remove oldest deleted ID
-        }
-        print('Marked message $messageId as deleted.');
-      }
-      await _saveData();
+      final alertToDelete = notifications[index];
+      await alertToDelete.delete(); // 1. Deletes from the Hive database instantly
+      notifications.removeAt(index); // 2. Removes from UI
       notifyListeners();
     }
   }
-}
+ }
 
 
 class MainPage extends StatefulWidget {
@@ -795,11 +681,11 @@ class _MainPageState extends State<MainPage> {
             labelType: NavigationRailLabelType.all,
             destinations: const [
               NavigationRailDestination(
-                icon: Icon(Icons.home),
-                label: Text('Home'),
+                icon: Icon(Icons.notifications),
+                label: Text('Alerts'),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.group),
+                icon: Icon(Icons.account_tree),
                 label: Text('Projects'),
               ),
               NavigationRailDestination(
@@ -829,71 +715,89 @@ class HomePage extends StatelessWidget {
             );
           }
           return ListView.builder(
-            padding: const EdgeInsets.all(16.0),
-            itemCount: provider.notifications.length,
-            itemBuilder: (context, index) {
-              final notification = provider.notifications[index];
-              final int? timestampMillis = notification['timestamp'] as int?;
-              final String? notificationProjectId = notification['projectId'] as String?;
+                      padding: const EdgeInsets.all(16.0),
+                      itemCount: provider.notifications.length,
+                      itemBuilder: (context, index) {
+                        final alert = provider.notifications[index];
+                        final DateTime date = DateTime.fromMillisecondsSinceEpoch(alert.timestamp);
+                        final String formattedDate = DateFormat('dd.MM.yy HH:mm').format(date);
 
-              String formattedDate = 'No date';
-              if (timestampMillis != null) {
-                final DateTime date =
-                    DateTime.fromMillisecondsSinceEpoch(timestampMillis);
-                formattedDate = DateFormat('dd.MM.yy HH:mm').format(date);
-              }
+                        // Context resolution
+                        String projectDisplay = 'System';
+                        if (alert.projectId != null) {
+                          final proj = provider.projects.firstWhereOrNull((p) => p['id'] == alert.projectId);
+                          projectDisplay = proj != null ? proj['name']! : 'Project: ${alert.projectId}';
+                        }
 
-              String associatedProjectDisplay = 'Unknown Project';
-              if (notificationProjectId != null) {
-                final associatedProject = provider.projects.firstWhereOrNull(
-                  (p) => p['id'] == notificationProjectId
-                );
+                        // Visual Severity Mapping
+                        IconData severityIcon;
+                        Color severityColor;
+                        switch (alert.severity.toLowerCase()) {
+                          case 'critical':
+                            severityIcon = Icons.error_outline;
+                            severityColor = Colors.red.shade600;
+                            break;
+                          case 'warning':
+                            severityIcon = Icons.warning_amber_rounded;
+                            severityColor = Colors.orange.shade700;
+                            break;
+                          default: // 'info'
+                            severityIcon = Icons.info_outline;
+                            severityColor = Colors.blue.shade600;
+                        }
 
-                if (associatedProject != null) {
-                    final name = associatedProject['name'] ?? 'Unnamed Project';
-                    associatedProjectDisplay = '$name (${notificationProjectId})';
-                } else {
-                    associatedProjectDisplay = 'Project ID: $notificationProjectId';
-                }
-              }
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 12.0),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(color: severityColor.withOpacity(0.3), width: 1),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Header Row: Icon, Project, Time, Delete
+                                Row(
+                                  children: [
+                                    Icon(severityIcon, color: severityColor, size: 20),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        '$projectDisplay • $formattedDate',
+                                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      height: 24,
+                                      width: 24,
+                                      child: IconButton(
+                                        padding: EdgeInsets.zero,
+                                        icon: const Icon(Icons.close, size: 18, color: Colors.grey),
+                                        onPressed: () => Provider.of<NotificationProvider>(context, listen: false).deleteNotification(index),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
 
-              return Card(
-                margin: const EdgeInsets.only(bottom: 16.0),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '$formattedDate - $associatedProjectDisplay',
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded( // FIX: Expanded for notification title
-                            child: Text(
-                              notification['title']!,
-                              style: Theme.of(context).textTheme.titleLarge,
+                                // Core Content
+                                Text(
+                                  alert.title,
+                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  alert.message,
+                                  style: TextStyle(fontSize: 14, color: Colors.grey.shade800),
+                                ),
+                              ],
                             ),
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.delete),
-                            onPressed: () {
-                              Provider.of<NotificationProvider>(context, listen: false)
-                                  .deleteNotification(index);
-                            },
-                          ),
-                        ],
-                      ),
-                      Text(notification['message']!), // Text in a Column will wrap automatically
-                    ],
-                  ),
-                ),
-              );
-            },
-          );
+                        );
+                      },
+                    );
+
         },
       ),
     );
@@ -1619,7 +1523,7 @@ Future<void> _clearProjectCache() async {
           if (response.statusCode == 200) {
             final data = jsonDecode(response.body);
             final userProps = data['user_properties'] as Map<String, dynamic>?;
-
+            if (!mounted) return;
                 setState(() {
                   userTier = userProps?['tier'] ?? 'free';
                 });
@@ -1627,6 +1531,7 @@ Future<void> _clearProjectCache() async {
               }
         } catch (e) {
           print("Tier verification failed: $e");
+          if (!mounted) return;
           setState(() => userTier = 'free');
         }
       }
@@ -1672,6 +1577,26 @@ Future<void> _clearProjectCache() async {
      final data = _groupedData[uid]!;
      final bool isBlinking = _isBlinking[uid] ?? false;
      final String name = data['name']?.toString() ?? 'Device: $uid';
+     // --- NEW: Get the absolute latest timestamp for this specific device from Hive ---
+         final deviceLogs = logBox.values.where((log) => log.uid == uid && log.projectId == widget.projectId).toList();
+         // Sort to ensure we have the newest at the end
+         deviceLogs.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+         String timeString = "Unknown";
+
+             if (deviceLogs.isNotEmpty) {
+               final DateTime lastSeen = deviceLogs.last.timestamp;
+
+               // Format: YY-MM-DD HH:MM:SS
+               final String yy = lastSeen.year.toString().substring(2);
+               final String mm = lastSeen.month.toString().padLeft(2, '0');
+               final String dd = lastSeen.day.toString().padLeft(2, '0');
+               final String hh = lastSeen.hour.toString().padLeft(2, '0');
+               final String min = lastSeen.minute.toString().padLeft(2, '0');
+               final String sec = lastSeen.second.toString().padLeft(2, '0'); // Add seconds
+
+               timeString = "$yy-$mm-$dd $hh:$min:$sec"; // Append to string
+             }
 
      // 1. Save your awesome AnimatedContainer as a variable
      Widget cardContent = AnimatedContainer(
@@ -1715,11 +1640,51 @@ Future<void> _clearProjectCache() async {
              ),
              const Divider(),
              // Re-use your existing smart payload, passing the raw JSON back in
-             _buildSmartPayload(jsonEncode(data)),
-           ],
-         ),
-       ),
-     );
+
+         Builder(
+                       builder: (context) {
+                         String displayValue = 'Active';
+                         if (data.containsKey('value')) displayValue = data['value'].toString();
+                         else if (data.containsKey('status')) displayValue = data['status'].toString();
+                         else if (data.containsKey('state')) displayValue = data['state'].toString();
+
+                         return Padding(
+                           padding: const EdgeInsets.symmetric(vertical: 4.0),
+                           child: Row(
+                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                             crossAxisAlignment: CrossAxisAlignment.end,
+                             children: [
+                               // The Bold Glanceable Value
+                               Text(
+                                 displayValue,
+                                 style: const TextStyle(
+                                   fontSize: 28,
+                                   fontWeight: FontWeight.w900,
+                                   color: Colors.black87,
+                                   letterSpacing: 1.2,
+                                 ),
+                               ),
+
+                               // The Crucial "Last Seen" Timestamp
+                               Row(
+                                 children: [
+                                   Icon(Icons.access_time, size: 14, color: Colors.grey.shade500),
+                                   const SizedBox(width: 4),
+                                   Text(
+                                     timeString,
+                                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
+                                   ),
+                                 ],
+                               )
+                             ],
+                           ),
+                         );
+                       }
+                     ),
+                   ],
+                 ),
+               ),
+             );
 
      // 2. Apply the Free Tier Paywall Blur
      // (Assuming userTier and _isBlurred are accessible variables in your state class)
@@ -1829,14 +1794,11 @@ Future<void> _clearProjectCache() async {
   void initState() {
     super.initState();
     _loadHistoryAndConnect();
-     // Add this line
-
   }
 
-  void _loadHistoryFromHive() {
+void _loadHistoryFromHive() {
     // Grab all logs for this specific project
     final projectLogs = logBox.values.where((log) => log.projectId == widget.projectId).toList();
-
     // Sort them by time so the sparkline draws left-to-right correctly
     projectLogs.sort((a, b) => a.timestamp.compareTo(b.timestamp));
 
@@ -1856,12 +1818,11 @@ Future<void> _clearProjectCache() async {
               _sparklineData[log.uid!]!.removeAt(0);
             }
           }
+        } else {
+          // If UID is null, it's a General Feed message!
+          _miscFeed.insert(0, log.rawJson);
+          if (_miscFeed.length > 50) _miscFeed.removeLast();
         }
-        else {
-                // If UID is null, it's a General Feed message!
-                _miscFeed.insert(0, log.rawJson);
-                if (_miscFeed.length > 50) _miscFeed.removeLast();
-              }
       }
     });
   }
@@ -1986,8 +1947,12 @@ Future<void> _clearProjectCache() async {
 
          // 1. Define and extract the numeric value safely in the correct scope
          double? numericVal;
-         if (decoded['value'] != null && decoded['value'] is num) {
-            numericVal = (decoded['value'] as num).toDouble();
+         if (decoded['value'] != null) {
+           if (decoded['value'] is num) {
+             numericVal = (decoded['value'] as num).toDouble();
+           } else {
+             numericVal = double.tryParse(decoded['value'].toString());
+           }
          }
 
          // 2. Update the UI State
@@ -1996,13 +1961,21 @@ Future<void> _clearProjectCache() async {
            _isBlinking[uid] = true;
 
            if (numericVal != null) {
-             _sparklineData.putIfAbsent(uid, () => []);
-             _sparklineData[uid]!.add(numericVal!);
+                     _sparklineData.putIfAbsent(uid, () => []);
 
-             // Keep only the last 30 points to save memory in the live view
-             if (_sparklineData[uid]!.length > 30) {
-               _sparklineData[uid]!.removeAt(0);
-             }
+                     // Force a new list reference so Flutter redraws
+                     List<double> currentData = List<double>.from(_sparklineData[uid]!);
+                     currentData.add(numericVal);
+
+                     if (currentData.length > 30) {
+                       currentData.removeAt(0);
+                     }
+
+                     _sparklineData[uid] = currentData;
+
+                     // DEBUG: This should definitely fire now
+                     print("🚀 SPARKLINE UPDATED [$uid]: $currentData");
+
            }
          });
 
@@ -2157,24 +2130,41 @@ Future<void> _clearProjectCache() async {
                                              "${log.timestamp.minute.toString().padLeft(2, '0')}:"
                                              "${log.timestamp.second.toString().padLeft(2, '0')}";
 
-                          return ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: Colors.grey.shade100,
-                              child: Icon(Icons.history, color: Colors.grey.shade600, size: 18),
-                            ),
-                            title: Text(
-                              log.numericValue != null ? "Value: ${log.numericValue}" : "Status Update",
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            subtitle: Text(
-                            log.name ?? "System Event",
-                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey.shade800),
-                            ),
-                            trailing: Text(
-                              timeString,
-                              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
-                            ),
-                          );
+                         return ListTile(
+                                                   contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                                                   leading: CircleAvatar(
+                                                     backgroundColor: Colors.grey.shade100,
+                                                     child: Icon(Icons.history, color: Colors.grey.shade600, size: 18),
+                                                   ),
+                                                   // Title: The Time and primary value
+                                                   title: Row(
+                                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                     children: [
+                                                       Text(
+                                                         log.numericValue != null ? "Value: ${log.numericValue}" : "Status Update",
+                                                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                                       ),
+                                                       Text(
+                                                         timeString,
+                                                         style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
+                                                       ),
+                                                     ],
+                                                   ),
+                                                   // Subtitle: The Full Smart Payload!
+                                                   subtitle: Padding(
+                                                     padding: const EdgeInsets.only(top: 12.0),
+                                                     child: Container(
+                                                       padding: const EdgeInsets.all(12),
+                                                       decoration: BoxDecoration(
+                                                         color: Colors.grey.shade50,
+                                                         borderRadius: BorderRadius.circular(8),
+                                                         border: Border.all(color: Colors.grey.shade200),
+                                                       ),
+                                                       // Here is your smart payload showing every key/value pair!
+                                                       child: _buildSmartPayload(log.rawJson),
+                                                     ),
+                                                   ),
+                                                 );
                         },
                       ),
                     ),
